@@ -42,6 +42,9 @@ Each letter object MUST have these three keys:
 The "thinking" field is for your internal monologue to plan your response. The user will not see it. Your actual reply goes in the "words" array.
 `;
 
+    // New AI prompt to fix invalid JSON
+    const jsonFixerSystemPrompt = `You are a JSON correction AI. A previous AI call failed to produce valid JSON according to a specific schema. Your task is to fix the provided invalid text and make it a valid JSON object that conforms to the required structure. The user will provide the original prompt, the invalid text, and the error. Respond ONLY with the corrected, valid JSON object and nothing else.`;
+
     chatForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const userMessage = messageInput.value.trim();
@@ -63,9 +66,9 @@ The "thinking" field is for your internal monologue to plan your response. The u
             if (aiResponse) {
                 renderAIResponse(aiResponse);
                  // Add the final, successful response to history for context
-                conversationHistory.push({ role: 'assistant', content: JSON.stringify(aiResponse) });
+                conversationHistory.push({ role: 'assistant', content: `Responded with: ${JSON.stringify(aiResponse.words.map(w => w.map(l => l.letter).join('')).join(' '))}` });
             } else {
-                 displayErrorMessage('Sorry, I received an invalid response. Please try again.');
+                 displayErrorMessage('Sorry, I couldn\'t generate a valid response. Please try again.');
             }
         } catch (error) {
             console.error('Error getting AI response:', error);
@@ -99,16 +102,34 @@ The "thinking" field is for your internal monologue to plan your response. The u
         return loadingElement;
     }
 
-    // New 3-step process to get the AI response
+    // New 3-step process with retry logic
     async function getAIResponse(allowedLetters) {
         // Step 1: Get a standard, conversational response without constraints.
         const idealResponseText = await getIdealResponse();
         if (!idealResponseText) throw new Error("Step 1 failed: Could not generate an ideal response.");
 
-        // Step 2 & 3: Take the ideal response and transform it based on the letter constraints.
-        const finalResponseJson = await getTransformedResponse(idealResponseText, allowedLetters);
-        
-        return finalResponseJson;
+        // Step 2 & 3 with retry logic
+        let retries = 3;
+        let lastError = null;
+        let lastInvalidResponse = null;
+
+        while (retries > 0) {
+            try {
+                console.log(`Transformation attempt, retries left: ${retries}`);
+                const responseJson = await getTransformedResponse(idealResponseText, allowedLetters, lastInvalidResponse, lastError);
+                return responseJson; // If successful, exit the loop and return.
+            } catch (error) {
+                console.error(`Attempt failed: ${error.message}`);
+                lastError = error.message;
+                lastInvalidResponse = error.rawResponse || lastInvalidResponse; // Store the raw invalid response for the next attempt
+                retries--;
+                if (retries === 0) {
+                    // All retries failed, throw the last error to be caught by the submit handler.
+                    console.error("All retries failed.");
+                    throw new Error("Failed to get a valid response from the AI after multiple attempts.");
+                }
+            }
+        }
     }
 
     async function getIdealResponse() {
@@ -125,31 +146,58 @@ The "thinking" field is for your internal monologue to plan your response. The u
         return completion.content;
     }
 
-    async function getTransformedResponse(idealResponseText, allowedLetters) {
-        console.log("Step 2 & 3: Transforming response...");
-        const userContent = `The ideal response to the user is: "${idealResponseText}"
+    async function getTransformedResponse(idealResponseText, allowedLetters, invalidResponseToFix = null, previousError = null) {
+        let systemPrompt = transformationSystemPrompt;
+        let userContent;
 
-The only letters you can use are: "${allowedLetters}"
+        if (invalidResponseToFix) {
+            console.log("Attempting to fix previous invalid response...");
+            systemPrompt = jsonFixerSystemPrompt;
+            userContent = `The original prompt was to convert "${idealResponseText}" using only the letters "${allowedLetters}".
+            The previous attempt failed with this error: "${previousError}".
+            Here is the invalid response that needs fixing:
+            \`\`\`
+            ${invalidResponseToFix}
+            \`\`\`
+            Please correct it to be a valid JSON object matching the required schema.`;
+        } else {
+             console.log("Step 2 & 3: Transforming response...");
+             userContent = `The ideal response to the user is: "${idealResponseText}"
 
-Now, convert the ideal response into the required JSON format, using only the allowed letters and applying CSS transformations where necessary to create letters you don't have.`;
+            The only letters you can use are: "${allowedLetters}"
+
+            Now, convert the ideal response into the required JSON format, using only the allowed letters and applying CSS transformations where necessary to create letters you don't have.`;
+        }
 
         const completion = await websim.chat.completions.create({
             messages: [
-                { role: 'system', content: transformationSystemPrompt },
+                { role: 'system', content: systemPrompt },
                 { role: 'user', content: userContent }
             ],
             json: true,
         });
 
+        let responseJson;
         try {
-            const responseJson = JSON.parse(completion.content);
-            console.log("Transformation successful:", responseJson);
-            return responseJson;
+            responseJson = JSON.parse(completion.content);
         } catch (e) {
             console.error("Failed to parse AI response JSON:", e);
             console.error("Raw response:", completion.content);
-            return null;
+            const error = new Error("Response was not valid JSON.");
+            error.rawResponse = completion.content;
+            throw error;
         }
+
+        // Validate the structure of the parsed JSON
+        if (typeof responseJson !== 'object' || !Array.isArray(responseJson.words)) {
+             console.error("Parsed JSON has invalid structure:", responseJson);
+             const error = new Error("JSON structure is invalid (missing 'words' array).");
+             error.rawResponse = completion.content;
+             throw error;
+        }
+        
+        console.log("Transformation successful:", responseJson);
+        return responseJson;
     }
 
     function renderAIResponse(response) {
