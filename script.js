@@ -104,37 +104,43 @@ The "thinking" field is for your internal monologue to plan your response. The u
 
     // New 3-step process with infinite retry logic
     async function getAIResponse(allowedLetters) {
-        // Step 1: Get a standard, conversational response without constraints. Retry until successful.
-        let idealResponseText = null;
-        while (idealResponseText === null) {
-            try {
-                idealResponseText = await getIdealResponse();
-                if(!idealResponseText) { // handle empty response
-                    console.warn("getIdealResponse returned an empty response. Retrying...");
-                    idealResponseText = null; // ensure loop continues
+        try {
+            // Step 1: Get a standard, conversational response without constraints. Retry until successful.
+            let idealResponseText = null;
+            while (idealResponseText === null) {
+                try {
+                    idealResponseText = await getIdealResponse();
+                    if(!idealResponseText) { // handle empty response
+                        console.warn("getIdealResponse returned an empty response. Retrying...");
+                        idealResponseText = null; // ensure loop continues
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                } catch (error) {
+                    console.error('Error in getIdealResponse, retrying after 1s:', error);
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
-            } catch (error) {
-                console.error('Error in getIdealResponse, retrying after 1s:', error);
-                await new Promise(resolve => setTimeout(resolve, 1000));
             }
-        }
-
-        // Step 2 & 3 with infinite retry logic
-        let lastError = null;
-        let lastInvalidResponse = null;
-
-        while (true) { // Infinite loop as requested
-            try {
-                console.log(`Transformation attempt...`);
-                const responseJson = await getTransformedResponse(idealResponseText, allowedLetters, lastInvalidResponse, lastError);
-                return responseJson; // If successful, exit the loop and return.
-            } catch (error) {
-                console.error(`Attempt failed: ${error.message}. Retrying in 1s...`);
-                lastError = error.message;
-                lastInvalidResponse = error.rawResponse || lastInvalidResponse; // Store the raw invalid response for the next attempt
-                await new Promise(resolve => setTimeout(resolve, 1000)); // 1s cooldown
+    
+            // Step 2 & 3 with infinite retry logic
+            let lastError = null;
+            let lastInvalidResponse = null;
+    
+            while (true) { // Infinite loop as requested
+                try {
+                    console.log(`Transformation attempt...`);
+                    const responseJson = await getTransformedResponse(idealResponseText, allowedLetters, lastInvalidResponse, lastError);
+                    return responseJson; // If successful, exit the loop and return.
+                } catch (error) {
+                    console.error(`Attempt failed: ${error.message}. Retrying in 1s...`);
+                    lastError = error.message;
+                    lastInvalidResponse = error.rawResponse || lastInvalidResponse; // Store the raw invalid response for the next attempt
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1s cooldown
+                }
             }
+        } catch (error) {
+            console.error('A critical, unhandled error occurred in getAIResponse:', error);
+            // Throw the error again so the main submit handler's catch block can display the user-facing error message.
+            throw error;
         }
     }
 
