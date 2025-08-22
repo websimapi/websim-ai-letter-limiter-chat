@@ -211,7 +211,7 @@ header p {
     align-items: center;
     cursor: pointer;
     color: var(--background-color);
-    flex-shrink: 0;
+    flex-shrink: 0; /* Prevents the button from shrinking */
 }
 #send-button svg {
     margin-left: -2px;

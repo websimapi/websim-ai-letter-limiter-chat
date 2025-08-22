@@ -7,19 +7,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let conversationHistory = [];
 
-    const systemPrompt = `You are a creative AI assistant. You must respond to the user, but you have a unique constraint: you can only use the letters provided in the user's prompt.
+    const systemPrompt = `You are a creative and conversational AI assistant. Your primary goal is to chat with the user and respond to their messages in a meaningful way.
 
-To form words, you can be creative. If you don't have a letter you need, you can use an allowed letter and specify a CSS transform to make it look like the letter you want.
+However, you have a unique constraint: you can only use the letters provided in the user's prompt to form your response.
+
+To form words, you must be creative. If you don't have a letter you need, you can use an allowed letter and specify a CSS transform to make it look like the letter you want.
 Examples:
 - To make a 'p', use a 'd' and apply 'rotate(180deg)'.
 - To make an 'm', use a 'w' and apply 'rotate(180deg)'.
 - An 'n' can become a 'u' with 'rotate(180deg)'.
 - An 'i' can become an '!' with 'scaleY(-1)'.
+- A 'c' can become an 'e' with 'transform: rotate(180deg) scale(-1, 1)'.
 
 Your response MUST be a single, valid JSON object and nothing else. Do not include any text, markdown, or explanations outside of the JSON structure.
 
 The JSON object must strictly follow this structure:
 {
+  "thinking": "First, I need to understand what the user said. Then, I'll formulate a response. Finally, I will construct my response using only the allowed letters, getting creative with transformations if needed.",
   "words": [
     // This is an array of words.
     [ 
@@ -37,6 +41,8 @@ Each letter object MUST have these three keys:
 - "letter": (string) The character from the allowed set that you are using.
 - "transformation": (string) A valid CSS transform string (e.g., "rotate(90deg)", "scaleX(-1)", "none"). Use "none" if no transformation is needed.
 - "reason": (string) A brief explanation of why you chose this letter and transformation.
+
+The "thinking" field is for your internal monologue to plan your response. Do not put your conversational reply there. The user will not see it. Your actual reply goes in the "words" array. Be a good conversationalist! Listen to the user and reply appropriately.
 `;
 
     chatForm.addEventListener('submit', async (e) => {
@@ -54,7 +60,11 @@ Each letter object MUST have these three keys:
         try {
             const aiResponse = await getAIResponse(userMessage, allowedLetters);
             loadingIndicator.remove();
-            renderAIResponse(aiResponse);
+            if (aiResponse) {
+                renderAIResponse(aiResponse);
+            } else {
+                 displayErrorMessage('Sorry, I received an invalid response. Please try again.');
+            }
         } catch (error) {
             console.error('Error getting AI response:', error);
             loadingIndicator.remove();
@@ -88,7 +98,7 @@ Each letter object MUST have these three keys:
     }
 
     async function getAIResponse(userMessage, allowedLetters) {
-        const userContent = `Allowed letters: "${allowedLetters}"\n\nUser message: "${userMessage}"`;
+        const userContent = `These are the only letters I can use: "${allowedLetters}"\n\nHere is the user's message I need to respond to: "${userMessage}"`;
         
         conversationHistory.push({ role: 'user', content: userContent });
         conversationHistory = conversationHistory.slice(-6); // Keep history short
@@ -101,9 +111,17 @@ Each letter object MUST have these three keys:
             json: true,
         });
 
-        const responseJson = JSON.parse(completion.content);
-        conversationHistory.push({ role: 'assistant', content: completion.content });
-        return responseJson;
+        try {
+            const responseJson = JSON.parse(completion.content);
+            conversationHistory.push({ role: 'assistant', content: completion.content });
+            return responseJson;
+        } catch (e) {
+            console.error("Failed to parse AI response JSON:", e);
+            console.error("Raw response:", completion.content);
+            // Push the raw (invalid) response to history so the AI can see its mistake
+            conversationHistory.push({ role: 'assistant', content: completion.content });
+            return null;
+        }
     }
 
     function renderAIResponse(response) {
@@ -143,7 +161,8 @@ Each letter object MUST have these three keys:
     // Initial message from AI
     const initialMessage = {
         words: [
-            [{ letter: "h", transformation: "none", reason: "Available"}, { letter: "e", transformation: "none", reason: "Available"}, { letter: "l", transformation: "none", reason: "Available"}, { letter: "l", transformation: "none", reason: "Available"}, { letter: "o", transformation: "none", reason: "Available"}]
+            [{ letter: "h", transformation: "none", reason: "Available"}, { letter: "e", transformation: "none", reason: "Available"}, { letter: "l", transformation: "none", reason: "Available"}, { letter: "l", transformation: "none", reason: "Available"}, { letter: "o", transformation: "none", reason: "Available"}],
+            [{ letter: "w", transformation: "none", reason: "Available"}, { letter: "o", transformation: "none", reason: "Available"}, { letter: "l", transformation: "rotate(180deg)", reason: "Using 'l' for 'r' is a stretch, but possible"}, { letter: "d", transformation: "none", reason: "Available"}]
         ]
     };
     renderAIResponse(initialMessage);
