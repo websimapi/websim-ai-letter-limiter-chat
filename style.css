@@ -61,7 +61,7 @@ header p {
     overflow-y: auto;
     padding: 16px;
     display: flex;
-    flex-direction: column-reverse; /* New messages appear at bottom */
+    flex-direction: column;
 }
 
 #chat-messages {
@@ -216,4 +216,3 @@ header p {
 #send-button svg {
     margin-left: -2px;
 }
-

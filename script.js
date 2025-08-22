@@ -7,21 +7,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let conversationHistory = [];
 
-    const systemPrompt = `You are a creative AI assistant. You must respond to the user, but you have a unique constraint: you can only use the letters provided in the user's prompt. You cannot use any other letters.
+    const systemPrompt = `You are a creative AI assistant. You must respond to the user, but you have a unique constraint: you can only use the letters provided in the user's prompt.
 
-To form words, you can be creative. If you don't have a letter you need, you can use a different, allowed letter and specify a CSS transform to make it look like the letter you want. For example, to make a 'p', you could use a 'd' and apply 'rotate(180deg)'. To make an 'm', you could use a 'w' and apply 'rotate(180deg)'. An 'n' can become a 'u' with 'rotate(180deg)'.
+To form words, you can be creative. If you don't have a letter you need, you can use an allowed letter and specify a CSS transform to make it look like the letter you want.
+Examples:
+- To make a 'p', use a 'd' and apply 'rotate(180deg)'.
+- To make an 'm', use a 'w' and apply 'rotate(180deg)'.
+- An 'n' can become a 'u' with 'rotate(180deg)'.
+- An 'i' can become an '!' with 'scaleY(-1)'.
 
-You MUST respond in a specific JSON format, and nothing else. The JSON object should have a single key "words", which is an array of arrays. Each inner array represents a word, and contains objects, each representing a letter.
+Your response MUST be a single, valid JSON object and nothing else. Do not include any text, markdown, or explanations outside of the JSON structure.
 
-Each letter object must have these keys:
-- "letter": The character from the allowed set that you are using.
-- "transformation": A valid CSS transform string (e.g., "rotate(90deg)", "scaleX(-1)", "none").
-- "reason": A brief explanation of why you chose this letter and transformation, especially if it's not "none". For example, "'d' rotated 180 degrees looks like 'p'".
-
-Example response for the user prompt "hello" with allowed letters "h e l o d":
+The JSON object must strictly follow this structure:
 {
   "words": [
-    [
+    // This is an array of words.
+    [ 
+      // This is an array of letters, representing a single word.
       { "letter": "h", "transformation": "none", "reason": "Directly available." },
       { "letter": "e", "transformation": "none", "reason": "Directly available." },
       { "letter": "l", "transformation": "none", "reason": "Directly available." },
@@ -30,6 +32,11 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
     ]
   ]
 }
+
+Each letter object MUST have these three keys:
+- "letter": (string) The character from the allowed set that you are using.
+- "transformation": (string) A valid CSS transform string (e.g., "rotate(90deg)", "scaleX(-1)", "none"). Use "none" if no transformation is needed.
+- "reason": (string) A brief explanation of why you chose this letter and transformation.
 `;
 
     chatForm.addEventListener('submit', async (e) => {
@@ -59,7 +66,7 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'user');
         messageElement.textContent = message;
-        chatMessages.prepend(messageElement);
+        chatMessages.appendChild(messageElement);
         scrollToBottom();
     }
     
@@ -67,7 +74,7 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'ai');
         messageElement.textContent = message;
-        chatMessages.prepend(messageElement);
+        chatMessages.appendChild(messageElement);
         scrollToBottom();
     }
 
@@ -75,7 +82,7 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
         const loadingElement = document.createElement('div');
         loadingElement.classList.add('message', 'loading');
         loadingElement.innerHTML = `<div class="dot-flashing"></div>`;
-        chatMessages.prepend(loadingElement);
+        chatMessages.appendChild(loadingElement);
         scrollToBottom();
         return loadingElement;
     }
@@ -106,7 +113,7 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
         if (!response || !response.words) {
             console.error("Invalid AI response format:", response);
             messageElement.textContent = "I'm sorry, my response was formatted incorrectly.";
-            chatMessages.prepend(messageElement);
+            chatMessages.appendChild(messageElement);
             scrollToBottom();
             return;
         }
@@ -125,12 +132,11 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
             messageElement.appendChild(wordElement);
         });
 
-        chatMessages.prepend(messageElement);
+        chatMessages.appendChild(messageElement);
         scrollToBottom();
     }
 
     function scrollToBottom() {
-        // Since we prepend, we scroll to top of the container
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
@@ -142,4 +148,3 @@ Example response for the user prompt "hello" with allowed letters "h e l o d":
     };
     renderAIResponse(initialMessage);
 });
-
